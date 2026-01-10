@@ -108,6 +108,18 @@ def hash_ip(ip: Optional[str], salt: str) -> Optional[str]:
     return sha256_hex(salt + "|" + ip)[:16]  # krótszy identyfikator, wystarczy do analizy
 
 
+def iter_jsonl_limited(paths: List[Path], max_lines: Optional[int] = None) -> Iterable[Tuple[Path, int, str]]:
+    """
+    Jak iter_jsonl, ale kończy po max_lines (liczone jako linie fizyczne z pliku).
+    """
+    seen = 0
+    for p, line_no, line in iter_jsonl(paths):
+        yield p, line_no, line
+        seen += 1
+        if max_lines is not None and seen >= max_lines:
+            return
+
+
 def shannon_entropy(s: Optional[str]) -> Optional[float]:
     if not s:
         return None
@@ -661,7 +673,9 @@ def discover_cowrie_files(raw_cowrie_dir: Path) -> List[Path]:
     return [p for p in files if p.is_file()]
 
 
-def run_pipeline(paths: Paths, salt: str, window_minutes: int, keep_secrets: bool, batch_size: int, ingest: str, opencanary_first: bool) -> None:
+def run_pipeline(paths: Paths, salt: str, window_minutes: int, keep_secrets: bool, batch_size: int,
+                 ingest: str = "both", opencanary_first: bool = False,
+                 parse_selected: bool = False, opencanary_max_lines: int = 5_000_000, cowrie_max_files: int = 50) -> None:
     ensure_dirs(paths.processed_dir, paths.curated_dir, paths.rejects_dir)
 
     do_cowrie = ingest in ("both", "cowrie")
@@ -670,6 +684,22 @@ def run_pipeline(paths: Paths, salt: str, window_minutes: int, keep_secrets: boo
     # Odkrywaj pliki tylko dla tych etapów, które faktycznie robisz
     cowrie_files: List[Path] = discover_cowrie_files(paths.raw_cowrie_dir) if do_cowrie else []
     opencanary_files: List[Path] = [paths.raw_opencanary_file] if (do_opencanary and paths.raw_opencanary_file.exists()) else []
+
+    if do_cowrie and not cowrie_files:
+        raise FileNotFoundError(f"Nie znaleziono plików Cowrie w: {paths.raw_cowrie_dir}")
+
+    if do_opencanary and not opencanary_files:
+        raise FileNotFoundError(f"Brak opencanary.log pod: {paths.raw_opencanary_file}")
+
+    # --- Tryb parsowania wybranych fragmentów danych (dev mode) ---
+    if parse_selected:
+        if cowrie_files:
+            original = len(cowrie_files)
+            cowrie_files = cowrie_files[:max(0, cowrie_max_files)]
+            LOG.warning("Tryb --parse-selected: Cowrie ograniczone do %d/%d plików.", len(cowrie_files), original)
+
+        if opencanary_files:
+            LOG.warning("Tryb --parse-selected: OpenCanary ograniczone do pierwszych %d linii.", opencanary_max_lines)
 
     if do_cowrie:
         LOG.info("Cowrie files: %d", len(cowrie_files))
@@ -682,20 +712,8 @@ def run_pipeline(paths: Paths, salt: str, window_minutes: int, keep_secrets: boo
     if not do_cowrie and not do_opencanary:
         LOG.info("Ingest pominięty (--ingest none). Używam istniejących danych w DuckDB.")
 
-    cowrie_files = discover_cowrie_files(paths.raw_cowrie_dir)
-    opencanary_files = [paths.raw_opencanary_file] if paths.raw_opencanary_file.exists() else []
-
-    if not cowrie_files and not opencanary_files:
-        raise FileNotFoundError("Nie znaleziono plików wejściowych Cowrie/OpenCanary w podanych ścieżkach.")
-
-    LOG.info("Cowrie files: %d", len(cowrie_files))
-    if opencanary_files:
-        LOG.info("OpenCanary file: %s", paths.raw_opencanary_file)
-    else:
-        LOG.warning("Brak opencanary.log pod: %s (pomijam OpenCanary)", paths.raw_opencanary_file)
-
     conn = duckdb.connect(paths.duckdb_path.as_posix())
-    conn.execute("PRAGMA threads=4;")
+    conn.execute("PRAGMA threads=8;")
     conn.execute(CREATE_EVENTS_RAW_SQL)
 
     # reject files
@@ -746,12 +764,20 @@ def run_pipeline(paths: Paths, salt: str, window_minutes: int, keep_secrets: boo
 
     def ingest_opencanary() -> None:
         LOG.info("Ingest: OpenCanary")
-        opencanary_total = sum(count_lines_fast(fp) for fp in opencanary_files)
-        batch: List[Tuple[Any, ...]] = []
 
-        with tqdm(total=opencanary_total, desc="Ingest OpenCanary", unit="line", smoothing=0.05) as pbar:
-            for p, line_no, line in iter_jsonl(opencanary_files):
+        # Jeśli parse_selected -> nie skanujemy całego pliku dla count_lines_fast (to kosztowne przy 100M+ linii)
+        if parse_selected:
+            total_for_bar = opencanary_max_lines
+            iterator = iter_jsonl_limited(opencanary_files, max_lines=opencanary_max_lines)
+        else:
+            total_for_bar = sum(count_lines_fast(fp) for fp in opencanary_files)
+            iterator = iter_jsonl(opencanary_files)
+
+        batch: List[Tuple[Any, ...]] = []
+        with tqdm(total=total_for_bar, desc="Ingest OpenCanary", unit="line", smoothing=0.05) as pbar:
+            for p, line_no, line in iterator:
                 pbar.update(1)
+
                 line = line.strip()
                 if not line:
                     continue
@@ -831,6 +857,10 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--ingest", choices=["both", "cowrie", "opencanary", "none"], default="both", help="Co wczytywać do events_raw. 'none' = nie ingestuj nic, tylko buduj curated z istniejących danych w DuckDB.")
     ap.add_argument("--opencanary-first", action="store_true", help="Gdy --ingest both: wczytaj OpenCanary przed Cowrie.")
 
+    ap.add_argument("--parse-selected", action="store_true", help="Tryb deweloperski: parsuj tylko ograniczony fragment danych (szybsze testy).")
+    ap.add_argument("--opencanary-max-lines", type=int, default=5_000_000, help="Gdy --parse-selected: ile pierwszych linii z opencanary.log wczytać (domyślnie 5000000).")
+    ap.add_argument("--cowrie-max-files", type=int, default=50, help="Gdy --parse-selected: ile pierwszych plików cowrie.json* wczytać (domyślnie 50).")
+
     return ap.parse_args()
 
 
@@ -868,6 +898,9 @@ def main() -> None:
         batch_size=args.batch_size,
         ingest=args.ingest,
         opencanary_first=args.opencanary_first,
+        parse_selected=args.parse_selected,
+        opencanary_max_lines=args.opencanary_max_lines,
+        cowrie_max_files=args.cowrie_max_files,
     )
 
 
