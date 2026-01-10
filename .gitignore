@@ -3,4 +3,4 @@ data/
 *.pdf
 *.docx
 *.log
-
+*.parquet

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-# 99836 Damian Strojek
-# 2026
+#
+# SAP Parameter Validator
+# Copyright (C) 2026 Damian Strojek
+#
 """
 clean_honeypots.py
 
