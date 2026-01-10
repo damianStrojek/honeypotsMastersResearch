@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# 99836 Damian Strojek
+# 2026
 """
 clean_honeypots.py
 
@@ -147,6 +148,16 @@ def parse_timestamp(value: Any) -> Optional[datetime]:
     except Exception:
         return None
     return None
+
+
+def as_lower_str(v: Any) -> str:
+    """Bezpiecznie zamienia na lowercase string (obsługuje int/dict/None)."""
+    if v is None:
+        return ""
+    try:
+        return str(v).lower()
+    except Exception:
+        return ""
 
 
 def safe_int(x: Any) -> Optional[int]:
@@ -314,7 +325,9 @@ def normalize_cowrie(rec: dict, salt: str, keep_secrets: bool) -> Optional[Dict[
 
 def guess_service_from_opencanary(rec: dict) -> Optional[str]:
     # Najczęściej: logtype zawiera nazwę usługi (ftp, ssh, rdp, mysql, http, smb…)
-    logtype = (rec.get("logtype") or rec.get("type") or rec.get("logger") or "").lower()
+    logtype_val = rec.get("logtype") or rec.get("type") or rec.get("logger")
+    logtype = as_lower_str(logtype_val)
+
     if "ftp" in logtype:
         return "ftp"
     if "mysql" in logtype:
@@ -327,6 +340,7 @@ def guess_service_from_opencanary(rec: dict) -> Optional[str]:
         return "smb"
     if "http" in logtype:
         return "http"
+
     # fallback na port
     dst_port = safe_int(rec.get("dst_port") or rec.get("port"))
     port_map = {21: "ftp", 22: "ssh", 80: "http", 443: "http", 3389: "rdp", 3306: "mysql", 445: "smb"}
@@ -336,8 +350,9 @@ def guess_service_from_opencanary(rec: dict) -> Optional[str]:
 
 
 def guess_event_type_from_opencanary(rec: dict) -> str:
-    logtype = (rec.get("logtype") or rec.get("type") or "").lower()
-    # OpenCanary często loguje "login attempts" lub "connection"
+    logtype_val = rec.get("logtype") or rec.get("type")
+    logtype = as_lower_str(logtype_val)
+
     if "login" in logtype and ("fail" in logtype or "failed" in logtype):
         return "login_fail"
     if "login" in logtype and ("success" in logtype or "successful" in logtype):
@@ -646,8 +661,26 @@ def discover_cowrie_files(raw_cowrie_dir: Path) -> List[Path]:
     return [p for p in files if p.is_file()]
 
 
-def run_pipeline(paths: Paths, salt: str, window_minutes: int, keep_secrets: bool, batch_size: int) -> None:
+def run_pipeline(paths: Paths, salt: str, window_minutes: int, keep_secrets: bool, batch_size: int, ingest: str, opencanary_first: bool) -> None:
     ensure_dirs(paths.processed_dir, paths.curated_dir, paths.rejects_dir)
+
+    do_cowrie = ingest in ("both", "cowrie")
+    do_opencanary = ingest in ("both", "opencanary")
+
+    # Odkrywaj pliki tylko dla tych etapów, które faktycznie robisz
+    cowrie_files: List[Path] = discover_cowrie_files(paths.raw_cowrie_dir) if do_cowrie else []
+    opencanary_files: List[Path] = [paths.raw_opencanary_file] if (do_opencanary and paths.raw_opencanary_file.exists()) else []
+
+    if do_cowrie:
+        LOG.info("Cowrie files: %d", len(cowrie_files))
+    if do_opencanary:
+        if opencanary_files:
+            LOG.info("OpenCanary file: %s", paths.raw_opencanary_file)
+        else:
+            raise FileNotFoundError(f"Brak opencanary.log pod: {paths.raw_opencanary_file}")
+
+    if not do_cowrie and not do_opencanary:
+        LOG.info("Ingest pominięty (--ingest none). Używam istniejących danych w DuckDB.")
 
     cowrie_files = discover_cowrie_files(paths.raw_cowrie_dir)
     opencanary_files = [paths.raw_opencanary_file] if paths.raw_opencanary_file.exists() else []
@@ -678,57 +711,55 @@ def run_pipeline(paths: Paths, salt: str, window_minutes: int, keep_secrets: boo
         with out_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
-    # Ingest Cowrie
-    LOG.info("Ingest: Cowrie")
-    cowrie_total = sum(count_lines_fast(fp) for fp in cowrie_files)
-    batch: List[Tuple[Any, ...]] = []
+    def ingest_cowrie() -> None:
+        LOG.info("Ingest: Cowrie")
+        cowrie_total = sum(count_lines_fast(fp) for fp in cowrie_files)
+        batch: List[Tuple[Any, ...]] = []
 
-    with tqdm(total=cowrie_total, desc="Ingest Cowrie", unit="line", smoothing=0.05) as pbar:
-        for p, line_no, line in iter_jsonl(cowrie_files):
-            pbar.update(1)
-
-            line = line.strip()
-            if not line:
-                continue
-
-            rec = parse_json_line(line)
-            if rec is None:
-                rejects_summary["cowrie"]["bad_json"] += 1
-                write_reject(cowrie_rejects, {"file": p.as_posix(), "line": line_no, "reason": "bad_json", "raw": line[:500]})
-                continue
-
-            norm = normalize_cowrie(rec, salt=salt, keep_secrets=keep_secrets)
-            if norm is None:
-                rejects_summary["cowrie"]["bad_ts"] += 1
-                write_reject(cowrie_rejects, {"file": p.as_posix(), "line": line_no, "reason": "bad_ts", "raw": line[:500]})
-                continue
-
-            batch.append(dict_to_row(norm))
-            if len(batch) >= batch_size:
-                insert_batch(conn, batch)
-                batch.clear()
-
-        if batch:
-            insert_batch(conn, batch)
-            batch.clear()
-
-    # Ingest OpenCanary
-    if opencanary_files:
-        LOG.info("Ingest: OpenCanary")
-        opencanary_total = sum(count_lines_fast(fp) for fp in opencanary_files)
-
-        with tqdm(total=opencanary_total, desc="Ingest OpenCanary", unit="line", smoothing=0.05) as pbar:
-            for p, line_no, line in iter_jsonl(opencanary_files):
+        with tqdm(total=cowrie_total, desc="Ingest Cowrie", unit="line", smoothing=0.05) as pbar:
+            for p, line_no, line in iter_jsonl(cowrie_files):
                 pbar.update(1)
-
                 line = line.strip()
                 if not line:
                     continue
 
                 rec = parse_json_line(line)
-                if rec is None:
-                    rejects_summary["opencanary"]["bad_json"] += 1
-                    write_reject(opencanary_rejects, {"file": p.as_posix(), "line": line_no, "reason": "bad_json", "raw": line[:500]})
+                if not isinstance(rec, dict):
+                    rejects_summary["cowrie"]["other"] += 1
+                    write_reject(cowrie_rejects, {"file": p.as_posix(), "line": line_no, "reason": "not_dict_or_bad_json", "raw": line[:500]})
+                    continue
+
+                norm = normalize_cowrie(rec, salt=salt, keep_secrets=keep_secrets)
+                if norm is None:
+                    rejects_summary["cowrie"]["bad_ts"] += 1
+                    write_reject(cowrie_rejects, {"file": p.as_posix(), "line": line_no, "reason": "bad_ts", "raw": line[:500]})
+                    continue
+
+                batch.append(dict_to_row(norm))
+                if len(batch) >= batch_size:
+                    insert_batch(conn, batch)
+                    batch.clear()
+
+            if batch:
+                insert_batch(conn, batch)
+                batch.clear()
+
+    def ingest_opencanary() -> None:
+        LOG.info("Ingest: OpenCanary")
+        opencanary_total = sum(count_lines_fast(fp) for fp in opencanary_files)
+        batch: List[Tuple[Any, ...]] = []
+
+        with tqdm(total=opencanary_total, desc="Ingest OpenCanary", unit="line", smoothing=0.05) as pbar:
+            for p, line_no, line in iter_jsonl(opencanary_files):
+                pbar.update(1)
+                line = line.strip()
+                if not line:
+                    continue
+
+                rec = parse_json_line(line)
+                if not isinstance(rec, dict):
+                    rejects_summary["opencanary"]["other"] += 1
+                    write_reject(opencanary_rejects, {"file": p.as_posix(), "line": line_no, "reason": "not_dict_or_bad_json", "raw": line[:500]})
                     continue
 
                 norm = normalize_opencanary(rec, salt=salt, keep_secrets=keep_secrets)
@@ -745,6 +776,20 @@ def run_pipeline(paths: Paths, salt: str, window_minutes: int, keep_secrets: boo
             if batch:
                 insert_batch(conn, batch)
                 batch.clear()
+
+    # Kolejność ingestu
+    if do_cowrie or do_opencanary:
+        if ingest == "both" and opencanary_first:
+            if do_opencanary:
+                ingest_opencanary()
+            if do_cowrie:
+                ingest_cowrie()
+        else:
+            # domyślnie: cowrie -> opencanary, a jeśli --ingest opencanary to i tak poleci tylko opencanary
+            if do_cowrie:
+                ingest_cowrie()
+            if do_opencanary:
+                ingest_opencanary()
 
     LOG.info("Zapisano events_raw: %s", paths.duckdb_path)
 
@@ -783,6 +828,9 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--keep-secrets", action="store_true", help="Jeśli ustawione: zapisuj surowe IP/username/password w events_raw/events.")
     ap.add_argument("--verbose", action="store_true", help="Więcej logów.")
 
+    ap.add_argument("--ingest", choices=["both", "cowrie", "opencanary", "none"], default="both", help="Co wczytywać do events_raw. 'none' = nie ingestuj nic, tylko buduj curated z istniejących danych w DuckDB.")
+    ap.add_argument("--opencanary-first", action="store_true", help="Gdy --ingest both: wczytaj OpenCanary przed Cowrie.")
+
     return ap.parse_args()
 
 
@@ -818,6 +866,8 @@ def main() -> None:
         window_minutes=args.window_minutes,
         keep_secrets=args.keep_secrets,
         batch_size=args.batch_size,
+        ingest=args.ingest,
+        opencanary_first=args.opencanary_first,
     )
 
 
