@@ -3,27 +3,28 @@
 Repozytorium zawiera zestaw narzędzi do zbierania, czyszczenia i przygotowania danych z honeypotów (m.in. **Cowrie** i **OpenCanary**) pod dalszą analizę (baseline, ML, klastrowanie zachowań, generowanie raportów/IOC).
 
 Narzędzia:
-- **`cleanHoneypots99836.py`** — pipeline czyszczenia/normalizacji logów → **DuckDB + Parquet** (warstwy `raw → processed → curated`)
-
-
+- **`cleanHoneypots99836.py`** — strumień czyszczenia/normalizacji logów, który generuje **DuckDB + Parquet** (warstwy `raw → processed → curated`).
+- **`analyzeHoneypots99836.py`** - drugi etap strumienia badawczego pracujący wyłącznie na danych uprzednio przygotowanych przez narzędzie `cleanHoneypots99836.py` (pliki `logs.duckdb` oraz zestawy Parquet w katalogu `data/curated/`).
 
 ## cleanHoneypots99836.py
 
-1. Wrzuć logi do `data/raw/...`
-2. Zainstaluj zależności:
+### Wymagania
+
+1. Pliki logów znajdują się w folderze `data/raw/...`
+2. Zainstalowane są poniższe zależności:
    ```bash
    pip install duckdb python-dateutil tqdm
    ```
-3. Uruchom:
+3. Sposób uruchomienia:
    ```bash
    python3 cleanHoneypots99836.py --data-dir ./data
    ```
-4. Otwórz bazę:
+4. Podejrzenie utworzonej bazy danych:
    ```bash
    duckdb ./data/processed/logs.duckdb
    ```
 
-### Oczekiwana struktura katalogów:
+Oczekiwana struktura katalogów:
 
 ```text
 data/
@@ -144,3 +145,61 @@ python3 cleanHoneypots99836.py --data-dir ./data --keep-secrets
 
 `data/curated/reports/cleaning_report.json`
 - szybkie QC: liczności, zakres czasu, top eventy, statystyki odrzuceń
+
+## analyzeHoneypots99836.py
+
+Celem narzędzia jest analiza zdarzeń z honeypotów z wykorzystaniem metod regułowych oraz uczenia maszynowego, w szczególności:
+- wykrywanie automatyzacji ataków logowania (brute force, password spraying),
+- ewaluacja skuteczności metod detekcji na ręcznie oznaczonej próbce,
+- klastrowanie zachowań atakujących w sesjach Cowrie.
+
+Skrypt realizuje powyższe zadania w postaci kilku trybów pracy
+(subkomend CLI), umożliwiając modularne prowadzenie eksperymentów.
+
+### Wymagania
+
+```bash
+pip install duckdb pandas numpy tqdm scikit-learn
+```
+
+### Use-case A: wykrywanie automatyzacji logowań (anomalia)
+
+Analiza wykonywana jest na zbiorze zagregowanych **okien czasowych per adres IP i usługa**
+(`ip_windows_5m`), zawierających m.in.:
+- liczbę prób logowania,
+- liczbę unikalnych nazw użytkowników i haseł,
+- liczbę udanych logowań,
+- statystyki czasowe (interarrival time),
+- entropię haseł.
+
+```bash
+python3 analyzeHoneypots99836.py --data-dir ./data anomaly
+```
+
+### Wzbogacanie próbki do ręcznego etykietowania (labelprep)
+
+Tryb **`labelprep`** umożliwia wzbogacenie próbki do etykietowania o kontekst z tabel `events` / `events_raw` w DuckDB.
+
+```bash
+python3 analyzeHoneypots99836.py --data-dir ./data labelprep   --sample-csv data/curated/analysis/anomaly/label_sample.csv
+```
+
+Efektem jest plik `label_sample_enriched.csv`, przeznaczony do ręcznego uzupełnienia kolumny `label`.
+
+### Ewaluacja skuteczności metod (eval)
+
+```bash
+python3 analyzeHoneypots99836.py --data-dir ./data eval   --labeled-csv data/curated/analysis/anomaly/label_sample_enriched_labeled.csv   --pred-col baseline_alert
+```
+
+### Use-case B: klastrowanie sesji Cowrie
+
+```bash
+python3 analyzeHoneypots99836.py --data-dir ./data cluster --k 8 --min-commands 3
+```
+
+### Uwagi metodologiczne
+
+- Skrypt nie modyfikuje danych wejściowych.
+- Metody regułowe pełnią rolę baseline’u, a ML stanowi uzupełnienie.
+- Ręczne etykietowanie niewielkiej próbki pozwala na wiarygodną ewaluację.
