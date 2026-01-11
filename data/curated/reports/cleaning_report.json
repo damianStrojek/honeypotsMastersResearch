@@ -1,0 +1,99 @@
+{
+  "generated_at_utc": "2026-01-10T17:42:20.870934+00:00",
+  "counts": {
+    "events_raw": 547464,
+    "events_dedup": 547464,
+    "cowrie_sessions": 74032,
+    "ip_windows_5m": 11082
+  },
+  "time_range": {
+    "min_ts_utc": "2025-06-08 15:54:45.789256",
+    "max_ts_utc": "2026-01-06 21:17:18.226267"
+  },
+  "top_event_types": [
+    [
+      "opencanary",
+      "rdp",
+      "other",
+      199403
+    ],
+    [
+      "cowrie",
+      "ssh",
+      "other",
+      121455
+    ],
+    [
+      "cowrie",
+      "ssh",
+      "login_fail",
+      77932
+    ],
+    [
+      "cowrie",
+      "ssh",
+      "connect",
+      74031
+    ],
+    [
+      "cowrie",
+      "ssh",
+      "disconnect",
+      74031
+    ],
+    [
+      "opencanary",
+      "mysql",
+      "other",
+      326
+    ],
+    [
+      "opencanary",
+      "http",
+      "other",
+      249
+    ],
+    [
+      "opencanary",
+      "ftp",
+      "other",
+      16
+    ],
+    [
+      "cowrie",
+      "ssh",
+      "command",
+      12
+    ],
+    [
+      "opencanary",
+      "unknown",
+      "other",
+      5
+    ],
+    [
+      "cowrie",
+      "ssh",
+      "login_success",
+      4
+    ]
+  ],
+  "null_rates": {
+    "src_ip_hash_null": 5,
+    "ts_null": 0
+  },
+  "rejects": {
+    "cowrie": {
+      "bad_json": 0,
+      "bad_ts": 0,
+      "other": 1,
+      "reject_file": "C:/repos/MAGISTERKA/honeypotsMastersResearch/data/processed/rejects/cowrie_rejects.jsonl"
+    },
+    "opencanary": {
+      "bad_json": 0,
+      "bad_ts": 0,
+      "other": 0,
+      "reject_file": "C:/repos/MAGISTERKA/honeypotsMastersResearch/data/processed/rejects/opencanary_rejects.jsonl"
+    }
+  }
+}

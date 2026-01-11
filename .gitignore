@@ -1,6 +1,7 @@
-# Data for research
-data/
+# Source data for research
+data/raw/*
+data/processed/*
+
+# Documents
 *.pdf
 *.docx
-*.log
-*.parquet
