@@ -1,0 +1,20 @@
+{
+  "generated_at_utc": "2026-01-11T20:51:45.502263+00:00",
+  "rows_total": 103111,
+  "baseline": {
+    "attempts_ge": 20,
+    "unique_users_ge": 10,
+    "unique_passwords_ge": 10,
+    "max_mean_interarrival_s": 2.0,
+    "alerts_count": 3986
+  },
+  "isolation_forest": {
+    "contamination": 0.01,
+    "anomalies_count": 1032
+  },
+  "outputs": {
+    "parquet": "C:/repos/MAGISTERKA/honeypotsMastersResearch/data/curated/analysis/anomaly/anomaly_windows.parquet",
+    "top_if_csv": "C:/repos/MAGISTERKA/honeypotsMastersResearch/data/curated/analysis/anomaly/top_if_anomalies.csv",
+    "top_baseline_csv": "C:/repos/MAGISTERKA/honeypotsMastersResearch/data/curated/analysis/anomaly/top_baseline_alerts.csv"
+  }
+}

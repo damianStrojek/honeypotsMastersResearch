@@ -1,0 +1,12 @@
+# Source data for research
+data/raw/*
+data/processed/*
+data/curated/events/*.parquet
+
+# Documents
+*.pdf
+*.docx
+
+# Directories
+__pycache__/
+exp62_real_outputs/

@@ -1,0 +1,5 @@
+cluster,n_sessions,top_terms
+0,1,"whoami exit, ls whoami, whoami, exit, ls, whoami ls, uname, ls uname, ls ls, ls exit"
+1,1,"uname, ls uname, ls, whoami ls, whoami exit, whoami, ls whoami, ls ls, ls exit, exit"
+2,1,"ls ls, ls, ls exit, exit, whoami ls, whoami exit, whoami, uname, ls whoami, ls uname"
+3,1,"whoami ls, whoami, ls exit, exit, ls, whoami exit, uname, ls whoami, ls uname, ls ls"
