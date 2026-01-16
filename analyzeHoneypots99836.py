@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 #
+<<<<<<< HEAD
 # analyzeHoneypots99836.py
+=======
+# SAP Parameter Validator
+>>>>>>> e8218a5acbde141b3dfedb5db2572d033eb5b4c6
 # Copyright (C) 2026 Damian Strojek
 #
 """
@@ -608,6 +612,7 @@ def cluster_pipeline(
     tqdm.pandas(desc="Tokenizacja sesji")
     df["doc"] = df["commands_seq"].progress_apply(command_tokens_from_seq)
 
+<<<<<<< HEAD
     # TF-IDF: przy bardzo małej liczbie sesji ustawiamy min_df=1, żeby nie wyzerować słownika
     n_docs = int(len(df))
     min_df = 2 if n_docs >= 10 else 1
@@ -618,10 +623,18 @@ def cluster_pipeline(
         token_pattern=r"(?u)\b[a-zA-Z0-9_\-]{2,}\b",
         min_df=min_df,
         max_df=max_df,
+=======
+    vectorizer = TfidfVectorizer(
+        lowercase=True,
+        token_pattern=r"(?u)\b[a-zA-Z0-9_\-]{2,}\b",
+        min_df=2,
+        max_df=0.8,
+>>>>>>> e8218a5acbde141b3dfedb5db2572d033eb5b4c6
         ngram_range=(1, 2),
     )
     X = vectorizer.fit_transform(df["doc"].fillna(""))
 
+<<<<<<< HEAD
     # KMeans wymaga n_samples >= n_clusters. Przy małych próbkach dopasowujemy k automatycznie.
     n_samples = int(X.shape[0])
     if n_samples < 2:
@@ -634,6 +647,8 @@ def cluster_pipeline(
         LOG.warning("n_samples=%d < k=%d. Ustawiam k=%d.", n_samples, k, n_samples)
         k = n_samples
 
+=======
+>>>>>>> e8218a5acbde141b3dfedb5db2572d033eb5b4c6
     km = KMeans(n_clusters=k, random_state=seed, n_init="auto")
     labels = km.fit_predict(X)
     df["cluster"] = labels.astype(int)
@@ -652,6 +667,7 @@ def cluster_pipeline(
 
     summary = pd.DataFrame(rows).sort_values("n_sessions", ascending=False)
 
+<<<<<<< HEAD
     # 2D PCA współrzędne (CSV do wykresów) — przy małej liczbie cech/obserwacji schodzimy do 1D
     n_for_coords = min(20000, X.shape[0])
     n_features = int(X.shape[1])
@@ -666,6 +682,13 @@ def cluster_pipeline(
         coords_df = pd.DataFrame(coords, columns=["x"])
         coords_df["y"] = 0.0
 
+=======
+    # 2D PCA współrzędne (CSV do wykresów)
+    n_for_coords = min(20000, X.shape[0])
+    pca = PCA(n_components=2, random_state=seed)
+    coords = pca.fit_transform(X[:n_for_coords].toarray())
+    coords_df = pd.DataFrame(coords, columns=["x", "y"])
+>>>>>>> e8218a5acbde141b3dfedb5db2572d033eb5b4c6
     coords_df["cluster"] = labels[:n_for_coords]
 
     out_parquet = out_dir / "session_clusters.parquet"

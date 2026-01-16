@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 #
+<<<<<<< HEAD
 # cleanHoneypots99836.py
+=======
+# SAP Parameter Validator
+>>>>>>> e8218a5acbde141b3dfedb5db2572d033eb5b4c6
 # Copyright (C) 2026 Damian Strojek
 #
 """

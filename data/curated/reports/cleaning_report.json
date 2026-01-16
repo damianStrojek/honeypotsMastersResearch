@@ -1,10 +1,19 @@
 {
+<<<<<<< HEAD
   "generated_at_utc": "2026-01-11T20:46:43.956922+00:00",
   "counts": {
     "events_raw": 2531929,
     "events_dedup": 2184464,
     "cowrie_sessions": 414021,
     "ip_windows_5m": 103111
+=======
+  "generated_at_utc": "2026-01-10T17:42:20.870934+00:00",
+  "counts": {
+    "events_raw": 547464,
+    "events_dedup": 547464,
+    "cowrie_sessions": 74032,
+    "ip_windows_5m": 11082
+>>>>>>> e8218a5acbde141b3dfedb5db2572d033eb5b4c6
   },
   "time_range": {
     "min_ts_utc": "2025-06-08 15:54:45.789256",
@@ -12,15 +21,29 @@
   },
   "top_event_types": [
     [
+<<<<<<< HEAD
       "cowrie",
       "ssh",
       "other",
       730462
+=======
+      "opencanary",
+      "rdp",
+      "other",
+      199403
+    ],
+    [
+      "cowrie",
+      "ssh",
+      "other",
+      121455
+>>>>>>> e8218a5acbde141b3dfedb5db2572d033eb5b4c6
     ],
     [
       "cowrie",
       "ssh",
       "login_fail",
+<<<<<<< HEAD
       425946
     ],
     [
@@ -28,11 +51,15 @@
       "ssh",
       "disconnect",
       414021
+=======
+      77932
+>>>>>>> e8218a5acbde141b3dfedb5db2572d033eb5b4c6
     ],
     [
       "cowrie",
       "ssh",
       "connect",
+<<<<<<< HEAD
       414020
     ],
     [
@@ -40,6 +67,15 @@
       "rdp",
       "other",
       199403
+=======
+      74031
+    ],
+    [
+      "cowrie",
+      "ssh",
+      "disconnect",
+      74031
+>>>>>>> e8218a5acbde141b3dfedb5db2572d033eb5b4c6
     ],
     [
       "opencanary",

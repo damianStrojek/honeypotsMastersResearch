@@ -1,12 +1,18 @@
 # Source data for research
 data/raw/*
 data/processed/*
+<<<<<<< HEAD
 data/curated/events/*.parquet
+=======
+>>>>>>> e8218a5acbde141b3dfedb5db2572d033eb5b4c6
 
 # Documents
 *.pdf
 *.docx
+<<<<<<< HEAD
 
 # Directories
 __pycache__/
 exp62_real_outputs/
+=======
+>>>>>>> e8218a5acbde141b3dfedb5db2572d033eb5b4c6

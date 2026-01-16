@@ -1,16 +1,29 @@
 {
+<<<<<<< HEAD
   "generated_at_utc": "2026-01-11T20:51:45.502263+00:00",
   "rows_total": 103111,
+=======
+  "generated_at_utc": "2026-01-11T13:18:13.910449+00:00",
+  "rows_total": 11082,
+>>>>>>> e8218a5acbde141b3dfedb5db2572d033eb5b4c6
   "baseline": {
     "attempts_ge": 20,
     "unique_users_ge": 10,
     "unique_passwords_ge": 10,
     "max_mean_interarrival_s": 2.0,
+<<<<<<< HEAD
     "alerts_count": 3986
   },
   "isolation_forest": {
     "contamination": 0.01,
     "anomalies_count": 1032
+=======
+    "alerts_count": 1193
+  },
+  "isolation_forest": {
+    "contamination": 0.01,
+    "anomalies_count": 109
+>>>>>>> e8218a5acbde141b3dfedb5db2572d033eb5b4c6
   },
   "outputs": {
     "parquet": "C:/repos/MAGISTERKA/honeypotsMastersResearch/data/curated/analysis/anomaly/anomaly_windows.parquet",
